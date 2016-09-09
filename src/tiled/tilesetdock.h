@@ -51,6 +51,7 @@ namespace Internal {
 
 class Document;
 class MapDocument;
+class TilesetDocument;
 class TilesetView;
 class TileStamp;
 class Zoomable;
@@ -116,9 +117,9 @@ private slots:
     void updateCurrentTiles();
     void indexPressed(const QModelIndex &index);
 
-    void tilesetAdded(int index, Tileset *tileset);
+    void tilesetAdded(TilesetDocument *tilesetDocument);
     void tilesetChanged(Tileset *tileset);
-    void tilesetRemoved(Tileset *tileset);
+    void tilesetRemoved(TilesetDocument *tilesetDocument);
     void tilesetMoved(int from, int to);
     void tilesetReplaced(int index, Tileset *tileset);
     void tilesetNameChanged(Tileset *tileset);
@@ -134,8 +135,6 @@ private slots:
     void importTileset();
     void exportTileset();
 
-    void documentAboutToClose(Document *document);
-
     void refreshTilesetMenu();
 
 private:
@@ -147,7 +146,7 @@ private:
     TilesetView *currentTilesetView() const;
     TilesetView *tilesetViewAt(int index) const;
 
-    void createTilesetView(int index, Tileset *tileset);
+    void createTilesetView(int index, TilesetDocument *tilesetDocument);
     void setupTilesetModel(TilesetView *view, Tileset *tileset);
 
     MapDocument *mMapDocument;
@@ -167,8 +166,6 @@ private:
     QAction *mExportTileset;
     QAction *mEditTileset;
     QAction *mDeleteTileset;
-
-    QMap<MapDocument *, QString> mCurrentTilesets;
 
     QToolButton *mTilesetMenuButton;
     QMenu *mTilesetMenu; //opens on click of mTilesetMenu
