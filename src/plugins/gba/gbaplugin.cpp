@@ -38,8 +38,14 @@ namespace GBA {
 QStringList GbaPlugin::outputFiles(const Tiled::Map *, const QString &fileName) const
 {
     QString c, h;
-    c.append(fileName).append(".c");
-    h.append(fileName).append(".h");
+    c.append(fileName);
+
+    if (!fileName.endsWith(".c",Qt::CaseInsensitive)) c.append(".c");
+
+    h.append(c);
+    h.chop(1);
+    h.append("h");
+
     return QStringList() << c << h;
 }
 
@@ -57,19 +63,15 @@ GbaPlugin::GbaPlugin()
 {
 }
 
-bool GbaPlugin::write(const Tiled::Map *map, const QString &fileName)
+bool GbaPlugin::saveFile(const QString &fileName, const QString &content)
 {
-    QString result("HI :)");
-    QString c, h;
-    c.append(fileName; //).append(".c");
-    h.append(fileName).append(".h");
-    QSaveFile mapFile(c);
+    QSaveFile mapFile(fileName);
     if (!mapFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
         mError = tr("Could not open file for writing.");
         return false;
     }
     QTextStream stream(&mapFile);
-    stream << result;
+    stream << content;
 
     if (mapFile.error() != QSaveFile::NoError) {
         mError = mapFile.errorString();
@@ -80,6 +82,16 @@ bool GbaPlugin::write(const Tiled::Map *map, const QString &fileName)
         mError = mapFile.errorString();
         return false;
     }
+    return true;
+}
+
+bool GbaPlugin::write(const Tiled::Map *map, const QString &fileName)
+{
+    QString result("HI :)");
+
+    QStringList files = outputFiles(map, fileName);
+    if (!saveFile(files[0],result)) return false;
+    if (!saveFile(files[1],result)) return false;
 
     return true;
 }

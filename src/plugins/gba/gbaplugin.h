@@ -44,6 +44,7 @@ protected:
     QString nameFilter() const override;
 
 private:
+    bool saveFile(const QString &fileName, const QString &content);
     QString mError;
 };
 
