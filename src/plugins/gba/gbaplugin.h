@@ -24,6 +24,9 @@
 #include "gbaplugin_global.h"
 #include "tiled.h"
 
+#include <QSaveFile>
+#include <QTextStream>
+
 #include "mapformat.h"
 
 namespace GBA {
@@ -44,7 +47,12 @@ protected:
     QString nameFilter() const override;
 
 private:
-    bool saveFile(const QString &fileName, const QString &content);
+    const static uint16_t TILE_ID_MASK = 0x01FF;
+    const static uint8_t  HFLIP_SHIFT  = 0x0A;
+    const static uint8_t  VFLIP_SHIFT  = 0x0B;
+
+    bool openFile(QSaveFile &file);
+    bool saveFile(QSaveFile &file);
     QString mError;
 };
 

@@ -21,9 +21,6 @@
 
 #include "gbaplugin.h"
 
-#include <QSaveFile>
-#include <QTextStream>
-
 #include "layer.h"
 #include "map.h"
 #include "mapobject.h"
@@ -63,35 +60,105 @@ GbaPlugin::GbaPlugin()
 {
 }
 
-bool GbaPlugin::saveFile(const QString &fileName, const QString &content)
+bool GbaPlugin::openFile(QSaveFile &file)
 {
-    QSaveFile mapFile(fileName);
-    if (!mapFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        mError = tr("Could not open file for writing.");
-        return false;
-    }
-    QTextStream stream(&mapFile);
-    stream << content;
+  if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    mError = tr("Could not open file \"");
+    mError.append(file.fileName());
+    mError.append("\" for writing.");
+    return false;
+  }
+  return true;
+}
 
-    if (mapFile.error() != QSaveFile::NoError) {
-        mError = mapFile.errorString();
+bool GbaPlugin::saveFile(QSaveFile &file)
+{
+    if (file.error() != QSaveFile::NoError) {
+        mError = file.errorString();
         return false;
     }
 
-    if (!mapFile.commit()) {
-        mError = mapFile.errorString();
+    if (!file.commit()) {
+        mError = file.errorString();
         return false;
     }
+
     return true;
 }
 
 bool GbaPlugin::write(const Tiled::Map *map, const QString &fileName)
 {
-    QString result("HI :)");
-
     QStringList files = outputFiles(map, fileName);
-    if (!saveFile(files[0],result)) return false;
-    if (!saveFile(files[1],result)) return false;
+
+    QSaveFile dataFile(files[0]);
+    QSaveFile headerFile(files[1]);
+
+    if (!openFile(dataFile)) return false;
+    if (!openFile(headerFile)) return false;
+
+    QTextStream data(&dataFile), header(&headerFile);
+
+    if (map->orientation() != Tiled::Map::Orthogonal)
+    {
+      mError = tr("Only orthogonal maps are supported.");
+      return false;
+    }
+
+    int totalWidth = map->width() * map->tileWidth();
+    int totalHeight = map->height() * map->tileHeight();
+
+    if (totalWidth > 64*8)
+    {
+      mError = tr("Total width (map witdth * tile width) is too big for a GBA map");
+      return false;
+    }
+
+    if (totalHeight > 64*8)
+    {
+      mError = tr("Total width (map witdth * tile width) is too big for a GBA map");
+      return false;
+    }
+
+    for (Tiled::Layer *anyLayer : map->layers())
+    {
+      Tiled::TileLayer *layer = anyLayer->asTileLayer();
+      if (!layer) continue; //Skip layers that are not tiles
+
+      QString layerName(layer->name());
+      for (QChar &c : layerName)
+        if (!c.isLetterOrNumber()) c = '_';
+
+      layerName.append("Data");
+
+      data << "const unsigned short " << layerName << "[1024] = {\n";
+
+      //data.setFieldWidth(4);
+      for (int i = 0; i < layer->height(); ++i)
+      {
+        for (int j = 0; j < layer->width(); ++j)
+        {
+          Tiled::Cell cell = layer->cellAt(j,i);
+
+          if (cell.isEmpty())
+          {
+              mError = QString("Cell at (%1,%2) is empty, no empty cells allowed.").arg(j).arg(i);
+              return false;
+          }
+
+          uint16_t id = cell.tile->id() & TILE_ID_MASK;
+          id |= cell.flippedHorizontally << HFLIP_SHIFT;
+          id |= cell.flippedVertically   << VFLIP_SHIFT;
+
+          data << showbase << hex << qSetFieldWidth(6) << id << reset << ", ";
+        }
+        data << '\n';
+      }
+
+      data << "};";
+    }
+
+    if (!saveFile(dataFile)) return false;
+    if (!saveFile(headerFile)) return false;
 
     return true;
 }
