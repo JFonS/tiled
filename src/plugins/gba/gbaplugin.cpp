@@ -128,9 +128,7 @@ bool GbaPlugin::write(const Tiled::Map *map, const QString &fileName)
       for (QChar &c : layerName)
         if (!c.isLetterOrNumber()) c = '_';
 
-      layerName.append("Data");
-
-      data << "const unsigned short " << layerName << "[1024] = {\n";
+      data << "const unsigned short " << layerName << "[1024] = {" << endl;
 
       //data.setFieldWidth(4);
       for (int i = 0; i < layer->height(); ++i)
@@ -151,10 +149,17 @@ bool GbaPlugin::write(const Tiled::Map *map, const QString &fileName)
 
           data << showbase << hex << qSetFieldWidth(6) << id << reset << ", ";
         }
-        data << '\n';
+        data << endl;
       }
-
       data << "};";
+
+      header << "#ifndef MAP_" << layerName.toUpper() << "_H" << endl;
+      header << "#define MAP_" << layerName.toUpper() << "_H" << endl << endl;
+
+      header << "    #define " << layerName << "Len " << layer->width() * layer->height() * 2 << endl;
+      header << "    extern const unsigned short " << layerName << "[1024];" << endl << endl;
+
+      header << "#endif // MAP_" << layerName.toUpper() << "_H";
     }
 
     if (!saveFile(dataFile)) return false;
