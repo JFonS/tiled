@@ -58,14 +58,14 @@ QString GbaPlugin::errorString() const
 
 BgSize GbaPlugin::getMapSize(int w, int h) const
 {
-  const uint small = 32*TILE_SIZE;
-  const uint big   = 64*TILE_SIZE;
+    const uint small = 32*TILE_SIZE;
+    const uint big   = 64*TILE_SIZE;
 
-  if (w <= small and h <= small) return BgSize::BG_32x32;
-  if (w <= small and h <= big)   return BgSize::BG_32x64;
-  if (w <= big and h <= small)   return BgSize::BG_64x32;
-  if (w <= big and h <= big)     return BgSize::BG_64x64;
-  return BgSize::BG_ERROR;
+    if (w <= small and h <= small) return BgSize::BG_32x32;
+    if (w <= small and h <= big)   return BgSize::BG_32x64;
+    if (w <= big and h <= small)   return BgSize::BG_64x32;
+    if (w <= big and h <= big)     return BgSize::BG_64x64;
+    return BgSize::BG_ERROR;
 }
 
 GbaPlugin::GbaPlugin()
@@ -74,13 +74,13 @@ GbaPlugin::GbaPlugin()
 
 bool GbaPlugin::openFile(QSaveFile &file)
 {
-  if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-    mError = tr("Could not open file \"");
-    mError.append(file.fileName());
-    mError.append("\" for writing.");
-    return false;
-  }
-  return true;
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        mError = tr("Could not open file \"");
+        mError.append(file.fileName());
+        mError.append("\" for writing.");
+        return false;
+    }
+    return true;
 }
 
 bool GbaPlugin::saveFile(QSaveFile &file)
@@ -112,8 +112,8 @@ bool GbaPlugin::write(const Tiled::Map *map, const QString &fileName)
 
     if (map->orientation() != Tiled::Map::Orthogonal)
     {
-      mError = tr("Only orthogonal maps are supported.");
-      return false;
+        mError = tr("Only orthogonal maps are supported.");
+        return false;
     }
 
     int totalWidth = map->width() * map->tileWidth();
@@ -123,8 +123,8 @@ bool GbaPlugin::write(const Tiled::Map *map, const QString &fileName)
 
     if (bgsize == BgSize::BG_ERROR)
     {
-      mError = tr("Total map size is too big for a GBA map (max 64x64 tiles of 8x8 pixels)");
-      return false;
+        mError = tr("Total map size is too big for a GBA map (max 64x64 tiles of 8x8 pixels)");
+        return false;
     }
 
     int dataSize = 32*32 * (bgsize == BG_32x32 ? 1 : bgsize == BG_64x64 ? 4 : 2);
@@ -132,54 +132,56 @@ bool GbaPlugin::write(const Tiled::Map *map, const QString &fileName)
 
     for (Tiled::Layer *anyLayer : map->layers())
     {
-      Tiled::TileLayer *layer = anyLayer->asTileLayer();
-      if (!layer) continue; //Skip layers that are not tiles
+        Tiled::TileLayer *layer = anyLayer->asTileLayer();
+        if (!layer) continue; //Skip layers that are not tiles
 
-      int pitch = (bgsize == BG_32x32 || bgsize == BG_32x64 ? 32 : 64)/32;
-      for (int i = 0; i < layer->height(); ++i)
-      {
-        for (int j = 0; j < layer->width(); ++j)
+        int pitch = (bgsize == BG_32x32 || bgsize == BG_32x64 ? 32 : 64)/32;
+        for (int i = 0; i < layer->height(); ++i)
         {
+            for (int j = 0; j < layer->width(); ++j)
+            {
 
-          Tiled::Cell cell = layer->cellAt(j,i);
+                Tiled::Cell cell = layer->cellAt(j,i);
+                uint16_t id;
 
-          if (cell.isEmpty())
-          {
-              mError = QString("Cell at (%1,%2) is empty, no empty cells allowed.").arg(j).arg(i);
-              return false;
-          }
+                if (!cell.isEmpty())
+                {
+                    id = cell.tile->id() & TILE_ID_MASK;
+                    id |= cell.flippedHorizontally << HFLIP_SHIFT;
+                    id |= cell.flippedVertically   << VFLIP_SHIFT;
+                }
+                else
+                {
+                    id = 0;
+                }
 
-          uint16_t id = cell.tile->id() & TILE_ID_MASK;
-          id |= cell.flippedHorizontally << HFLIP_SHIFT;
-          id |= cell.flippedVertically   << VFLIP_SHIFT;
-
-          int sbb= (i/32)*pitch + (j/32);
-          int k = sbb*1024 + (i%32)*32 + j%32;
-          mapData[k] = id;
+                int sbb= (i/32)*pitch + (j/32);
+                int k = sbb*1024 + (i%32)*32 + j%32;
+                mapData[k] = id;
+            }
         }
-      }
 
-      QString layerName(layer->name());
-      for (QChar &c : layerName)
-        if (!c.isLetterOrNumber() && c != '\0') layerName.remove(c);
+        QString layerName(layer->name());
+        for (QChar &c : layerName)
+            if (!c.isLetterOrNumber() && c != '\0') layerName.remove(c);
 
-      data << "const unsigned short " << layerName << "[" << dataSize << "] = {" << endl;
+        data << "const unsigned short " << layerName << "[" << dataSize << "] = {" << endl;
+        int i;
+        for (i = 0; i < mapData.size(); ++i)
+        {
+            data << showbase << hex << qSetFieldWidth(3) << mapData[i] << reset << ",";
+            if (i%32 == 31) data << endl;
+        }
+        if (i%32 != 31) data << endl;
+        data << "};";
 
-      for (int i = 0; i < mapData.size(); ++i)
-      {
-        data << showbase << hex << qSetFieldWidth(6) << mapData[i] << reset << ", ";
-        if (i > 0 && i%8 == 0) data << endl;
-      }
+        header << "#ifndef MAP_" << layerName.toUpper() << "_H" << endl;
+        header << "#define MAP_" << layerName.toUpper() << "_H" << endl << endl;
 
-      data << "};";
+        header << "    #define " << layerName << "Len " << dataSize * 2 << endl; //Size in bytes
+        header << "    extern const unsigned short " << layerName << "[" << dataSize << "];" << endl << endl;
 
-      header << "#ifndef MAP_" << layerName.toUpper() << "_H" << endl;
-      header << "#define MAP_" << layerName.toUpper() << "_H" << endl << endl;
-
-      header << "    #define " << layerName << "Len " << dataSize << endl;
-      header << "    extern const unsigned short " << layerName << "[" << dataSize << "];" << endl << endl;
-
-      header << "#endif // MAP_" << layerName.toUpper() << "_H";
+        header << "#endif // MAP_" << layerName.toUpper() << "_H";
     }
 
     if (!saveFile(dataFile)) return false;
