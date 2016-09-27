@@ -26,10 +26,19 @@
 
 #include <QSaveFile>
 #include <QTextStream>
+#include <QDebug>
 
 #include "mapformat.h"
 
 namespace GBA {
+
+enum BgSize {
+  BG_32x32,
+  BG_32x64,
+  BG_64x32,
+  BG_64x64,
+  BG_ERROR
+};
 
 class GBAPLUGINSHARED_EXPORT GbaPlugin : public Tiled::WritableMapFormat
 {
@@ -50,6 +59,11 @@ private:
     const static uint16_t TILE_ID_MASK = 0x01FF;
     const static uint8_t  HFLIP_SHIFT  = 0x0A;
     const static uint8_t  VFLIP_SHIFT  = 0x0B;
+
+    const static uint16_t TILE_SIZE = 8;
+
+
+    BgSize getMapSize(int w, int h) const;
 
     bool openFile(QSaveFile &file);
     bool saveFile(QSaveFile &file);

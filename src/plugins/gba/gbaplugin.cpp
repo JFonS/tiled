@@ -56,6 +56,18 @@ QString GbaPlugin::errorString() const
     return mError;
 }
 
+BgSize GbaPlugin::getMapSize(int w, int h) const
+{
+  const uint small = 32*TILE_SIZE;
+  const uint big   = 64*TILE_SIZE;
+
+  if (w <= small and h <= small) return BgSize::BG_32x32;
+  if (w <= small and h <= big)   return BgSize::BG_32x64;
+  if (w <= big and h <= small)   return BgSize::BG_64x32;
+  if (w <= big and h <= big)     return BgSize::BG_64x64;
+  return BgSize::BG_ERROR;
+}
+
 GbaPlugin::GbaPlugin()
 {
 }
@@ -107,34 +119,28 @@ bool GbaPlugin::write(const Tiled::Map *map, const QString &fileName)
     int totalWidth = map->width() * map->tileWidth();
     int totalHeight = map->height() * map->tileHeight();
 
-    if (totalWidth > 64*8)
+    BgSize bgsize = getMapSize(totalWidth,totalHeight);
+
+    if (bgsize == BgSize::BG_ERROR)
     {
-      mError = tr("Total width (map witdth * tile width) is too big for a GBA map");
+      mError = tr("Total map size is too big for a GBA map (max 64x64 tiles of 8x8 pixels)");
       return false;
     }
 
-    if (totalHeight > 64*8)
-    {
-      mError = tr("Total width (map witdth * tile width) is too big for a GBA map");
-      return false;
-    }
+    int dataSize = 32*32 * (bgsize == BG_32x32 ? 1 : bgsize == BG_64x64 ? 4 : 2);
+    std::vector<uint16_t> mapData(dataSize, 0);
 
     for (Tiled::Layer *anyLayer : map->layers())
     {
       Tiled::TileLayer *layer = anyLayer->asTileLayer();
       if (!layer) continue; //Skip layers that are not tiles
 
-      QString layerName(layer->name());
-      for (QChar &c : layerName)
-        if (!c.isLetterOrNumber()) c = '_';
-
-      data << "const unsigned short " << layerName << "[1024] = {" << endl;
-
-      //data.setFieldWidth(4);
+      int pitch = (bgsize == BG_32x32 || bgsize == BG_32x64 ? 32 : 64)/32;
       for (int i = 0; i < layer->height(); ++i)
       {
         for (int j = 0; j < layer->width(); ++j)
         {
+
           Tiled::Cell cell = layer->cellAt(j,i);
 
           if (cell.isEmpty())
@@ -147,17 +153,31 @@ bool GbaPlugin::write(const Tiled::Map *map, const QString &fileName)
           id |= cell.flippedHorizontally << HFLIP_SHIFT;
           id |= cell.flippedVertically   << VFLIP_SHIFT;
 
-          data << showbase << hex << qSetFieldWidth(6) << id << reset << ", ";
+          int sbb= (i/32)*pitch + (j/32);
+          int k = sbb*1024 + (i%32)*32 + j%32;
+          mapData[k] = id;
         }
-        data << endl;
       }
+
+      QString layerName(layer->name());
+      for (QChar &c : layerName)
+        if (!c.isLetterOrNumber() && c != '\0') layerName.remove(c);
+
+      data << "const unsigned short " << layerName << "[" << dataSize << "] = {" << endl;
+
+      for (int i = 0; i < mapData.size(); ++i)
+      {
+        data << showbase << hex << qSetFieldWidth(6) << mapData[i] << reset << ", ";
+        if (i > 0 && i%8 == 0) data << endl;
+      }
+
       data << "};";
 
       header << "#ifndef MAP_" << layerName.toUpper() << "_H" << endl;
       header << "#define MAP_" << layerName.toUpper() << "_H" << endl << endl;
 
-      header << "    #define " << layerName << "Len " << layer->width() * layer->height() * 2 << endl;
-      header << "    extern const unsigned short " << layerName << "[1024];" << endl << endl;
+      header << "    #define " << layerName << "Len " << dataSize << endl;
+      header << "    extern const unsigned short " << layerName << "[" << dataSize << "];" << endl << endl;
 
       header << "#endif // MAP_" << layerName.toUpper() << "_H";
     }
