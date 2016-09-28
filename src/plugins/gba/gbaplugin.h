@@ -63,7 +63,7 @@ private:
     const static uint16_t TILE_SIZE = 8;
 
 
-    BgSize getMapSize(int w, int h) const;
+    BgSize getMapSize(uint w, uint h) const;
 
     bool openFile(QSaveFile &file);
     bool saveFile(QSaveFile &file);

@@ -56,7 +56,7 @@ QString GbaPlugin::errorString() const
     return mError;
 }
 
-BgSize GbaPlugin::getMapSize(int w, int h) const
+BgSize GbaPlugin::getMapSize(uint w, uint h) const
 {
     const uint small = 32*TILE_SIZE;
     const uint big   = 64*TILE_SIZE;
@@ -77,7 +77,7 @@ bool GbaPlugin::openFile(QSaveFile &file)
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         mError = tr("Could not open file \"");
         mError.append(file.fileName());
-        mError.append("\" for writing.");
+        mError.append(tr("\" for writing."));
         return false;
     }
     return true;
@@ -116,6 +116,16 @@ bool GbaPlugin::write(const Tiled::Map *map, const QString &fileName)
         return false;
     }
 
+    if (map->tileWidth() % TILE_SIZE != 0 || map->tileHeight() % TILE_SIZE != 0)
+    {
+        mError = tr("Tile size must be multiple of ");
+        mError.append(TILE_SIZE);
+        mError.append("x");
+        mError.append(TILE_SIZE);
+        mError.append(".");
+        return false;
+    }
+
     int totalWidth = map->width() * map->tileWidth();
     int totalHeight = map->height() * map->tileHeight();
 
@@ -128,36 +138,44 @@ bool GbaPlugin::write(const Tiled::Map *map, const QString &fileName)
     }
 
     int dataSize = 32*32 * (bgsize == BG_32x32 ? 1 : bgsize == BG_64x64 ? 4 : 2);
+
     std::vector<uint16_t> mapData(dataSize, 0);
+
+    uint pitch = (bgsize == BG_32x32 || bgsize == BG_32x64 ? 32 : 64)/32;
+    uint tilesetPitch = map->tilesetAt(0)->columnCount();
+    uint scaleFactor =  map->tilesetAt(0)->tileWidth()/TILE_SIZE;
 
     for (Tiled::Layer *anyLayer : map->layers())
     {
         Tiled::TileLayer *layer = anyLayer->asTileLayer();
         if (!layer) continue; //Skip layers that are not tiles
 
-        int pitch = (bgsize == BG_32x32 || bgsize == BG_32x64 ? 32 : 64)/32;
+
         for (int i = 0; i < layer->height(); ++i)
         {
             for (int j = 0; j < layer->width(); ++j)
             {
 
                 Tiled::Cell cell = layer->cellAt(j,i);
-                uint16_t id;
+                uint16_t tileId = cell.isEmpty() ? 0 : cell.tile->id();
 
-                if (!cell.isEmpty())
-                {
-                    id = cell.tile->id() & TILE_ID_MASK;
-                    id |= cell.flippedHorizontally << HFLIP_SHIFT;
-                    id |= cell.flippedVertically   << VFLIP_SHIFT;
-                }
-                else
-                {
-                    id = 0;
-                }
+                uint tileX = (tileId % tilesetPitch) * scaleFactor;
+                uint tileY = (tileId / tilesetPitch) * scaleFactor;
 
-                int sbb= (i/32)*pitch + (j/32);
-                int k = sbb*1024 + (i%32)*32 + j%32;
-                mapData[k] = id;
+                for (uint k = 0; k < scaleFactor; ++k)
+                {
+                    for (uint l = 0; l < scaleFactor; ++l)
+                    {
+                        uint my = i*scaleFactor+k, mx = j*scaleFactor+l;
+                        uint sbb= (my/32)*pitch + (mx/32);
+                        uint p = sbb*1024 + (my%32)*32 + mx%32;
+
+                        uint16_t id = (tileY + (cell.flippedVertically ? scaleFactor - 1 - k : k)) * tilesetPitch * scaleFactor + tileX + (cell.flippedHorizontally ? scaleFactor -1 - l : l);
+                        id |= cell.flippedHorizontally << HFLIP_SHIFT;
+                        id |= cell.flippedVertically   << VFLIP_SHIFT;
+                        mapData[p] = id;
+                    }
+                }
             }
         }
 
@@ -166,10 +184,11 @@ bool GbaPlugin::write(const Tiled::Map *map, const QString &fileName)
             if (!c.isLetterOrNumber() && c != '\0') layerName.remove(c);
 
         data << "const unsigned short " << layerName << "[" << dataSize << "] = {" << endl;
-        int i;
+
+        uint i;
         for (i = 0; i < mapData.size(); ++i)
         {
-            data << showbase << hex << qSetFieldWidth(3) << mapData[i] << reset << ",";
+            data << showbase << hex << qSetFieldWidth(6) << mapData[i] << reset << ",";
             if (i%32 == 31) data << endl;
         }
         if (i%32 != 31) data << endl;
