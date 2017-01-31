@@ -2,5 +2,6 @@ include(../plugin.pri)
 
 
 SOURCES += gbaplugin.cpp
-HEADERS += bgaplugin.h \
+HEADERS += gbaplugin.h \
     gbaplugin_global.h
+

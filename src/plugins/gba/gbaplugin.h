@@ -30,15 +30,11 @@
 
 #include "mapformat.h"
 
+
+typedef std::vector< std::vector< std::vector<std::vector<uint16_t>> > > MapData;
+
 namespace GBA {
 
-enum BgSize {
-  BG_32x32,
-  BG_32x64,
-  BG_64x32,
-  BG_64x64,
-  BG_ERROR
-};
 
 class GBAPLUGINSHARED_EXPORT GbaPlugin : public Tiled::WritableMapFormat
 {
@@ -47,6 +43,7 @@ class GBAPLUGINSHARED_EXPORT GbaPlugin : public Tiled::WritableMapFormat
 
 public:
     GbaPlugin();
+
 
     bool write(const Tiled::Map *map, const QString &fileName) override;
     QString errorString() const override;
@@ -63,7 +60,9 @@ private:
     const static uint16_t TILE_SIZE = 8;
 
 
-    BgSize getMapSize(uint w, uint h) const;
+    //BgSize getMapSize(uint w, uint h) const;
+
+    bool checkParameters(const Tiled::Map *map);
 
     bool openFile(QSaveFile &file);
     bool saveFile(QSaveFile &file);
