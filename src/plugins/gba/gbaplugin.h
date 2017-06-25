@@ -49,6 +49,10 @@ public:
     QString errorString() const override;
     QStringList outputFiles(const Tiled::Map *, const QString &fileName) const override;
 
+    void writeAsmHeader(QString layerName, QTextStream &data);
+    
+    void writeTileData(MapData mapData, QTextStream data, QString layerName, int blocksY, int blocksX);
+    
 protected:
     QString nameFilter() const override;
 

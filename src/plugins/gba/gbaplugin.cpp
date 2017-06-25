@@ -1,24 +1,3 @@
-/*
- * Defold Tiled Plugin
- * Copyright 2016, Nikita Razdobreev <exzo0mex@gmail.com>
- * Copyright 2016, Thorbjørn Lindeijer <bjorn@lindeijer.nl>
- *
- * This file is part of Tiled.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the Free
- * Software Foundation; either version 2 of the License, or (at your option)
- * any later version.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License along with
- * this program. If not, see <http://www.gnu.org/licenses/>.
- */
-
 #include "gbaplugin.h"
 
 #include "layer.h"
@@ -114,6 +93,16 @@ namespace GBA {
       if (!c.isLetterOrNumber() && c != '\0') str.remove(c);
   }
 
+  void GbaPlugin::writeAsmHeader(QString name, QTextStream &file)
+  {
+    file << "@{{BLOCK(" << name << ")" << endl;
+    file << ".section .rodata" << endl;
+    file << ".align	2"  << endl;
+    file << ".global " << name  << endl;
+    file << ".hidden " << name  << endl;
+    file << name  << ":" << endl;
+  }
+
   bool GbaPlugin::write(const Tiled::Map *map, const QString &fileName)
   {
     if (!checkParameters(map)) return false;
@@ -149,15 +138,12 @@ namespace GBA {
       Tiled::TileLayer *layer = anyLayer->asTileLayer();
       if (!layer) continue; //Skip layers that are not tiles
 
-      qDebug() << scaleFactor;
-
       for (int i = 0; i < layer->height(); ++i)
       {
         for (int j = 0; j < layer->width(); ++j)
         {
-
           Tiled::Cell cell = layer->cellAt(j,i);
-          uint16_t tileId = cell.isEmpty() ? emptyTileId : cell.tile->id() * scaleFactor * scaleFactor;
+          uint16_t tileId = (cell.isEmpty() ? emptyTileId : cell.tile->id()) * scaleFactor * scaleFactor;
 
           for (uint k = 0; k < scaleFactor; ++k)
           {
@@ -187,19 +173,20 @@ namespace GBA {
 
       QString layerName(layer->name());
       fixString(layerName);
+      QString logicLayerName(layerName + "_logic");
 
-      data << "@{{BLOCK(" << layerName << ")" << endl;
-      data << ".section .rodata" << endl;
-      data << ".align	2"  << endl;
-      data << ".global " << layerName  << endl;
-      data << ".hidden " << layerName  << endl;
-      data << layerName  << ":" << endl;
+      // Write tile data
+      writeAsmHeader(layerName, data);
 
-      for (int i = 0; i < blocksY; ++i) {
-        for (int j = 0; j < blocksX; ++j) {
+      for (int i = 0; i < blocksY; ++i)
+      {
+        for (int j = 0; j < blocksX; ++j)
+        {
           data << ".hword ";
-          for (int k = 0; k < 32; ++k) {
-            for (int l = 0; l < 32; ++l) {
+          for (int k = 0; k < 32; ++k)
+          {
+            for (int l = 0; l < 32; ++l)
+            {
               data << "0x" << QString("%1").arg(mapData[i][j][k][l], 4, 16, QLatin1Char( '0' ));
               if (k < 31 || l < 31) data << ",";
             }
@@ -210,7 +197,27 @@ namespace GBA {
 
       data << "@}}BLOCK(" << layerName << ")" << endl << endl;
 
-      header << "    extern const unsigned short " << layerName << "[" << blocksY << "][" << blocksX << "][32][32];" << endl << endl;
+      // Write logic data
+      writeAsmHeader(logicLayerName, data);
+
+
+      for (int i = 0; i < layer->height(); ++i)
+      {
+        data << ".hword ";
+        for (int j = 0; j < layer->width(); ++j)
+        {
+          Tiled::Cell cell = layer->cellAt(j,i);
+          uint16_t tileId = cell.isEmpty() ? emptyTileId : cell.tile->id();
+          data << "0x" << QString("%1").arg(tileId, 4, 16, QLatin1Char( '0' ));
+          if (j < layer->width()-1) data << ",";
+        }
+        data << endl;
+      }
+
+      data << "@}}BLOCK(" << logicLayerName << ")" << endl << endl;
+
+      header << "    extern const unsigned short " << layerName << "[" << blocksY << "][" << blocksX << "][32][32];" << endl;
+      header << "    extern const unsigned short " << logicLayerName << "[" << layer->width() << "][" << layer->height() << "];" << endl << endl;
     }
 
     header << "#endif // MAP_" << defName.toUpper() << "_H";
