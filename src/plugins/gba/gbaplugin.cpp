@@ -217,10 +217,12 @@ namespace GBA {
       data << "@}}BLOCK(" << logicLayerName << ")" << endl << endl;
 
       header << "    extern const unsigned short " << layerName << "[" << blocksY << "][" << blocksX << "][32][32];" << endl;
-      header << "    extern const unsigned short " << logicLayerName << "[" << layer->width() << "][" << layer->height() << "];" << endl << endl;
+      header << "    extern const unsigned short " << logicLayerName << "[" << layer->width() << "][" << layer->height() << "];" << endl;
+      header << "    const unsigned int " << layerName << "Width  = " << map->width() << ";" << endl;
+      header << "    const unsigned int " << layerName << "Height = " << map->height() << ";" << endl << endl;
     }
 
-    header << "#endif // MAP_" << defName.toUpper() << "_H";
+    header << "#endif // MAP_" << defName.toUpper() << "_H" << endl;
 
     if (!saveFile(dataFile)) return false;
     if (!saveFile(headerFile)) return false;
